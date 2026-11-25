@@ -59,6 +59,7 @@ npm start            # 웹을 빌드하고 http://127.0.0.1:3000 에서 실행
 | `OFFICE_REMOTE_WORK`                   | `afterHours`                 | `none`이면 퇴근 후에도 재택 없이 출근                                     |
 | `OFFICE_SPEECH_EXPOSURE`               | `status`                     | 말풍선 노출: `status` / `title` / `messages` / `raw`                      |
 | `OFFICE_ABSENCE_NAP_MINUTES` 등        | 30 / 300 / 1440              | 소진 시 쪽잠·수면·조기퇴근 경계(분)                                       |
+| `OFFICE_TOWN_CLOCK_OFFSET_MINUTES`     | `0`                          | 테스트용: 동네 시계만 분 단위로 이동(예: `300`이면 저녁에 낮 거리를 확인) |
 | `OFFICE_TRUSTED_NETWORKS`              | –                            | 소유자로 볼 네트워크 CIDR, 예: `100.64.0.0/10`                            |
 | `OFFICE_ALLOWED_HOSTS`                 | –                            | 접속을 허용할 추가 호스트 이름                                            |
 | `OFFICE_PUBLIC_HOSTS`                  | –                            | 항상 읽기 전용으로 볼 공개 도메인                                         |
