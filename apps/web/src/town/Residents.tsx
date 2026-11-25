@@ -205,6 +205,10 @@ export function Residents({
     meshes[0].count = count;
     meshes[1].count = count;
     meshes[2].count = covers;
+    // Exposed for verification (e.g. low-performance mode draws fewer people).
+    const drawn = String(count);
+    if (document.body.dataset.townResidentsDrawn !== drawn)
+      document.body.dataset.townResidentsDrawn = drawn;
     for (const mesh of meshes) {
       mesh.boundingSphere = captureRadius;
       mesh.instanceMatrix.needsUpdate = true;
