@@ -49,7 +49,7 @@ export function serverSkew(
   return Math.round(serverNow - (sentAt + receivedAt) / 2);
 }
 
-export function useWeather() {
+export function useWeather(settingsVersion?: number) {
   const [company, setCompany] = useState(initial);
   const [visitor, setVisitor] = useState<WeatherReading | null>(null);
   const [location, setLocation] = useState<WeatherLocation | null>(null);
@@ -65,9 +65,12 @@ export function useWeather() {
       controller?.abort();
       controller = new AbortController();
       try {
-        const response = await fetch("/api/weather", {
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          `/api/weather?revision=${settingsVersion ?? 0}`,
+          {
+            signal: controller.signal,
+          },
+        );
         if (response.ok) setCompany((await response.json()) as WeatherReading);
       } catch {
         // The last known reading is still useful if the proxy is temporarily offline.
@@ -79,7 +82,7 @@ export function useWeather() {
       controller?.abort();
       window.clearInterval(timer);
     };
-  }, []);
+  }, [settingsVersion]);
 
   // The viewer's clock may be off; follow the server's real time instead.
   const [skew, setSkew] = useState(0);

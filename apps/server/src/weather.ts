@@ -43,6 +43,19 @@ export class CompanyWeather {
     this.cached = { location, current: null, at: null, stale: true };
   }
 
+  setLocation(location: WeatherLocation): void {
+    const before = this.cached.location;
+    if (
+      before.latitude === location.latitude &&
+      before.longitude === location.longitude &&
+      before.timeZone === location.timeZone
+    )
+      return;
+    this.cached = { location, current: null, at: null, stale: true };
+    this.nextFetchAt = -Infinity;
+    this.pending = undefined;
+  }
+
   read(): Promise<WeatherReading> {
     if (this.pending) return this.pending;
     if (this.clock() < this.nextFetchAt) return Promise.resolve(this.cached);
@@ -51,20 +64,23 @@ export class CompanyWeather {
   }
 
   private async refresh(): Promise<WeatherReading> {
+    const { location } = this.cached;
     try {
-      const response = await this.request(forecastUrl(this.cached.location), {
+      const response = await this.request(forecastUrl(location), {
         signal: AbortSignal.timeout(4500),
       });
       if (!response.ok) throw new Error("Weather service unavailable");
       const current = readForecast(await response.json());
+      if (this.cached.location !== location) return this.read();
       const at = this.clock();
       this.cached = { ...this.cached, current, at, stale: false };
       this.nextFetchAt = at + WEATHER_CACHE_MS;
     } catch {
+      if (this.cached.location !== location) return this.read();
       this.cached = { ...this.cached, stale: true };
       this.nextFetchAt = this.clock() + 60_000;
     } finally {
-      this.pending = undefined;
+      if (this.cached.location === location) this.pending = undefined;
     }
     return this.cached;
   }

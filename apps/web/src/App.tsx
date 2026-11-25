@@ -17,6 +17,7 @@ import {
 import { computeCampusLayout, findOffice } from "./layout/campusLayout.ts";
 import type { Focus } from "./scene/Campus.tsx";
 import { collectDesks } from "./sim/playback.ts";
+import { AdminPanel } from "./ui/AdminPanel.tsx";
 import { atmosphere } from "./weather/atmosphere.ts";
 import { useWeather } from "./weather/useWeather.ts";
 
@@ -87,7 +88,13 @@ export function App() {
     (selection: TownSelection) => setTownSelection(selection),
     [],
   );
-  const weather = useWeather();
+  const weather = useWeather(snapshot?.settingsVersion);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const previewVisitor =
+    new URLSearchParams(window.location.search).get("view") === "public";
+  const owner = snapshot?.viewer === "owner";
+  const exitPreview = new URL(window.location.href);
+  exitPreview.searchParams.delete("view");
   const [tour, setTour] = useState<"wide" | "approach" | "seen">(() =>
     tourSeen() || reduceMotionPreference() ? "seen" : "wide",
   );
@@ -263,9 +270,24 @@ export function App() {
             <i />
             <i />
           </span>
-          <h1>Herdr Office</h1>
+          <h1>{snapshot?.companyName ?? "Herdr Office"}</h1>
         </div>
         <div className="header-actions">
+          {owner && (
+            <button
+              className="performance"
+              type="button"
+              aria-haspopup="dialog"
+              onClick={() => setAdminOpen(true)}
+            >
+              관리
+            </button>
+          )}
+          {previewVisitor && (
+            <a className="performance preview-exit" href={exitPreview.href}>
+              공개 미리보기 종료
+            </a>
+          )}
           <span className="connection" data-live={Boolean(live)} role="status">
             {connectionTitle}
           </span>
@@ -444,7 +466,7 @@ export function App() {
             onClose={() => setEmployee(null)}
             onLocate={locate}
             actions={{
-              owner: snapshot?.viewer === "owner",
+              owner,
               sites: [
                 ...new Set(organization.buildings.map((b) => b.site ?? b.name)),
               ],
@@ -457,6 +479,12 @@ export function App() {
           />
         )}
       </div>
+      {owner && adminOpen && (
+        <AdminPanel
+          organization={organization}
+          close={() => setAdminOpen(false)}
+        />
+      )}
     </main>
   );
 }

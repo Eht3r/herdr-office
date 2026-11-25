@@ -1,26 +1,20 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SpeechExposure } from "@herdr-office/core";
-import { accessOptionsFromEnv, createAccess } from "./access.ts";
 import { createApp } from "./app.ts";
 import { CompanyCalendar, defaultSchedule } from "./calendar.ts";
 import { OrganizationStore } from "./db/OrganizationStore.ts";
 import { HcClient } from "./hc/HcClient.ts";
-import { defaultAbsenceThresholds } from "./sim/absence.ts";
+import { SettingsStore } from "./settings/SettingsStore.ts";
 import { Planner } from "./sim/Planner.ts";
 import { Simulation } from "./sim/Simulation.ts";
 import { SimulationStore } from "./sim/SimulationStore.ts";
-import {
-  configuredHours,
-  configuredTeamHours,
-  WorkHours,
-} from "./sim/WorkHours.ts";
+import { WorkHours } from "./sim/WorkHours.ts";
 import { Company } from "./state/Company.ts";
 import { configuredTownSeed, TownSociety } from "./town/TownSociety.ts";
 import { fundingFromEnv, TownStore } from "./town/TownStore.ts";
 import { UsageMonitor } from "./usage.ts";
-import { CompanyWeather, companyWeatherLocation } from "./weather.ts";
+import { CompanyWeather } from "./weather.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const dbFile = resolve(
@@ -35,59 +29,40 @@ const company = new Company(new HcClient(), () => ({
   defaultWhenUnknown: store.defaultWhenUnknown(),
   placements: store.listPlacements(),
 }));
-const schedule = {
-  ...defaultSchedule,
-  timeZone: process.env.OFFICE_TIME_ZONE ?? defaultSchedule.timeZone,
-  country: process.env.OFFICE_COUNTRY ?? defaultSchedule.country,
-  enabled: process.env.OFFICE_WORK_HOURS_ENABLED !== "false",
-};
-const calendar = new CompanyCalendar(schedule);
-const hours = new WorkHours(
-  simulationStore,
-  schedule.enabled,
-  process.env.OFFICE_LEARN_HOURS === "true",
-  configuredHours(process.env.OFFICE_COMPANY_HOURS),
-  configuredTeamHours(process.env.OFFICE_TEAM_HOURS),
-);
-const exposures: SpeechExposure[] = ["status", "title", "messages", "raw"];
-const exposure = exposures.find(
-  (mode) => mode === process.env.OFFICE_SPEECH_EXPOSURE,
-);
-const numberOr = (value: string | undefined, fallback: number) =>
-  value === undefined ? fallback : Number(value) * 60_000;
-const remoteWork =
-  process.env.OFFICE_REMOTE_WORK === "none" ? "none" : "afterHours";
+const settings = new SettingsStore(dbFile, process.env);
+const calendar = new CompanyCalendar();
+const hours = new WorkHours(simulationStore, true, false);
 const planner = new Planner(simulationStore, hours, {
-  exposure,
-  remoteWork,
-  thresholds: {
-    napMs: numberOr(
-      process.env.OFFICE_ABSENCE_NAP_MINUTES,
-      defaultAbsenceThresholds.napMs,
-    ),
-    sleepMs: numberOr(
-      process.env.OFFICE_ABSENCE_SLEEP_MINUTES,
-      defaultAbsenceThresholds.sleepMs,
-    ),
-    leaveMs: numberOr(
-      process.env.OFFICE_ABSENCE_LEAVE_MINUTES,
-      defaultAbsenceThresholds.leaveMs,
-    ),
-  },
+  exposure: "raw",
+  collectSpeech: true,
+  mask: settings.mask,
 });
-const simulation = new Simulation(
-  planner,
-  calendar,
-  new UsageMonitor(schedule.timeZone),
-  simulationStore,
-);
-const weather = new CompanyWeather(
-  companyWeatherLocation(
-    process.env.OFFICE_LATITUDE,
-    process.env.OFFICE_LONGITUDE,
-    schedule.timeZone,
-  ),
-);
+const usage = new UsageMonitor(defaultSchedule.timeZone);
+const simulation = new Simulation(planner, calendar, usage, simulationStore);
+const { latitude, longitude, timeZone } = settings.get().company;
+const weather = new CompanyWeather({ latitude, longitude, timeZone });
+const configure = (value: ReturnType<SettingsStore["get"]>) => {
+  const { company, work } = value;
+  calendar.schedule = {
+    ...defaultSchedule,
+    timeZone: company.timeZone,
+    country: company.country,
+    enabled: work.enabled,
+  };
+  hours.configure(work.enabled, work.learn, work.company, work.teams);
+  usage.setTimeZone(company.timeZone);
+  planner.configure(work.remoteWork, {
+    napMs: work.absence.nap * 60_000,
+    sleepMs: work.absence.sleep * 60_000,
+    leaveMs: work.absence.leave * 60_000,
+  });
+  weather.setLocation({
+    latitude: company.latitude,
+    longitude: company.longitude,
+    timeZone: company.timeZone,
+  });
+};
+configure(settings.get());
 // Test aid: shift only the neighborhood clock (e.g. +300 to see daytime streets at night).
 const townClockOffsetMs =
   Number(process.env.OFFICE_TOWN_CLOCK_OFFSET_MINUTES ?? 0) * 60_000 || 0;
@@ -100,9 +75,9 @@ const town = new TownSociety(
 );
 const app = await createApp(company, store, simulation, weather, {
   town,
-  access: createAccess(accessOptionsFromEnv(process.env)),
+  settings,
+  onSettings: configure,
   webRoot: resolve(repoRoot, "apps/web/dist"),
-  detailedSpeech: (exposure ?? "status") !== "status",
 });
 
 try {

@@ -104,6 +104,8 @@ export function subscribeOffice(): () => void {
   let retry: number | undefined;
   let handshake: number | undefined;
   const endpoint = new URL("/ws", window.location.href);
+  if (new URLSearchParams(window.location.search).get("view") === "public")
+    endpoint.searchParams.set("view", "public");
   endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
 
   const connect = () => {
@@ -154,10 +156,19 @@ export function subscribeOffice(): () => void {
       }
     };
     current.onerror = () => current.close();
-    current.onclose = () => {
+    current.onclose = (event) => {
       if (!active || socket !== current) return;
       window.clearTimeout(handshake);
-      useOffice.setState({ connection: "retrying" });
+      useOffice.setState(
+        event?.code === 1008
+          ? {
+              connection: "retrying",
+              snapshot: null,
+              timeline: null,
+              townFrame: null,
+            }
+          : { connection: "retrying" },
+      );
       const delay = Math.min(8000, 300 * 2 ** failures++);
       retry = window.setTimeout(connect, delay);
     };

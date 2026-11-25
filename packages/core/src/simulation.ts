@@ -81,13 +81,22 @@ export type ActionKind =
   | "leaveNote"
   | "readNotes";
 
+export interface SpeechVariants {
+  status: string;
+  title: string;
+  messages: string;
+  raw: string;
+}
+
 export interface Note {
   fromId: string;
   line: string;
+  speech?: SpeechVariants;
   at: number;
 }
 
 export interface ActionProps {
+  speech?: SpeechVariants;
   activity?: string;
   importance?: Importance;
   remoteWork?: boolean;
