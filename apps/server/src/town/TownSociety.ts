@@ -31,6 +31,7 @@ import {
   createBusiness,
   defaultRules,
   openNow,
+  planDelivery,
   receiveDelivery,
   rollBusiness,
 } from "./business.ts";
@@ -287,7 +288,8 @@ export class TownSociety extends EventEmitter<{ town: [TownFrame] }> {
         seed: this.seed,
         rules: this.rules,
       });
-      const next = receiveDelivery(result.shop, at);
+      // Restock shops left empty without waiting for the next customer.
+      const next = planDelivery(receiveDelivery(result.shop, at), at);
       if (result.event) {
         if (previous.kind)
           supply[previous.kind] = Math.max(0, supply[previous.kind] - 1);

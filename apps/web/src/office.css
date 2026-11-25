@@ -1104,3 +1104,14 @@ body,
     left: 10px;
   }
 }
+
+.truck-label {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eac78a;
+  color: #2b2418;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.25);
+}

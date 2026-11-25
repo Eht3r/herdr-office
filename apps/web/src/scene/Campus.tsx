@@ -174,6 +174,8 @@ function CameraRig({
       enableDamping={!reduceMotion}
       dampingFactor={0.11}
       enablePan
+      // The map is large; a few wheel steps should reach street level.
+      zoomSpeed={2}
       screenSpacePanning={false}
       mouseButtons={mouseButtons}
       touches={touches}

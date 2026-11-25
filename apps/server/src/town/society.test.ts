@@ -11,6 +11,7 @@ import {
   createBusiness,
   defaultRules,
   openNow,
+  planDelivery,
   receiveDelivery,
   rollBusiness,
 } from "./business.ts";
@@ -332,5 +333,20 @@ describe("town society", () => {
       true,
     );
     expect(wet.stories.length).toBeGreaterThan(clear.stories.length);
+  });
+
+  it("sends a delivery truck to a shop left with an empty shelf", () => {
+    const slot = district().entities.find(({ kind }) => kind === "cafe");
+    if (!slot) throw new Error("Missing cafe fixture");
+    const shop = createBusiness(slot, dates[0], seed);
+    expect(planDelivery(shop, 1000).deliveryAt).toBeNull();
+    shop.menu[0].stock = 0;
+    const planned = planDelivery(shop, 1000);
+    expect(planned.deliveryStartedAt).toBe(1000);
+    expect(planned.deliveryAt).toBeGreaterThan(1000);
+    // A truck already on the way is not sent twice.
+    expect(planDelivery(planned, 2000)).toBe(planned);
+    const arrived = receiveDelivery(planned, planned.deliveryAt ?? 0);
+    expect(arrived.menu.every(({ stock }) => stock > 0)).toBe(true);
   });
 });

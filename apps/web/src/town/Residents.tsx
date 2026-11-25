@@ -1,6 +1,6 @@
 import { hashSeed, type TownAction, type TownFrame } from "@herdr-office/core";
 import { type ThreeEvent, useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Color,
   type Group,
@@ -10,6 +10,7 @@ import {
   Vector3,
 } from "three";
 import { Box } from "../scene/Primitives.tsx";
+import { SceneLabel } from "../scene/SceneLabels.tsx";
 import { interpolateRoute, type PlaybackRoute } from "../sim/playback.ts";
 
 const coats = [
@@ -278,12 +279,16 @@ function Delivery({
   timeOffset: number;
 }) {
   const truck = useRef<Group>(null);
+  // A label follows the truck while it drives, so it can be spotted from afar.
+  const [driving, setDriving] = useState(false);
   useFrame(() => {
     if (!truck.current) return;
     const now = Date.now() + timeOffset;
-    truck.current.visible =
+    const active =
       now >= action.startAt && now < action.startAt + action.durationMs;
-    if (!truck.current.visible) return;
+    truck.current.visible = active;
+    if (active !== driving) setDriving(active);
+    if (!active) return;
     position(action, now, truck.current.position);
     truck.current.rotation.y = Math.atan2(
       action.to[0] - action.from[0],
@@ -292,6 +297,11 @@ function Delivery({
   });
   return (
     <group ref={truck} visible={false}>
+      {driving && (
+        <SceneLabel position={[0, 1.7, 0]} order={12}>
+          <span className="truck-label">납품 트럭</span>
+        </SceneLabel>
+      )}
       <Box
         position={[0, 0.55, -0.34]}
         size={[1.05, 0.95, 1.36]}

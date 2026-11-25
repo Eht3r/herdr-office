@@ -4,6 +4,7 @@ import type {
   TownResident,
   TownShop,
 } from "@herdr-office/core";
+import { useLayoutEffect, useRef } from "react";
 
 export type TownSelection =
   | { kind: "news" }
@@ -146,8 +147,19 @@ export function TownPanel({
       ? frame.residents.find(({ id }) => id === selection.id)
       : undefined;
   const title = shop?.name ?? resident?.name ?? "동네 신문";
+  // Each card opens from its top, not where the previous one was scrolled to.
+  const panel = useRef<HTMLElement>(null);
+  const selected = `${selection.kind}:${"id" in selection ? selection.id : ""}`;
+  useLayoutEffect(() => {
+    if (selected && panel.current) panel.current.scrollTop = 0;
+  }, [selected]);
   return (
-    <aside id="town-panel" className="org-panel town-panel" aria-label={title}>
+    <aside
+      ref={panel}
+      id="town-panel"
+      className="org-panel town-panel"
+      aria-label={title}
+    >
       <header className="town-panel-header">
         <h2>{title}</h2>
         <button className="campus-button" type="button" onClick={close}>
