@@ -138,12 +138,14 @@ export function Residents({
       if (!action || action.kind === "home" || action.kind === "rest") continue;
       const angle = locate(action);
       clip.copy(point).project(camera);
-      const distance = camera.position.distanceToSquared(point);
+      // The camera is orthographic and parked far away, so its distance says
+      // nothing about how close a person looks. Rank by nearness to the
+      // middle of the screen instead and keep everyone in view.
+      const distance = clip.x * clip.x + clip.y * clip.y;
       if (
         Math.abs(clip.x) > 1.12 ||
         Math.abs(clip.y) > 1.12 ||
-        Math.abs(clip.z) > 1 ||
-        distance > 50_000
+        Math.abs(clip.z) > 1
       )
         continue;
       visible.push({
