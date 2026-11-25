@@ -50,6 +50,11 @@ export class Simulation extends EventEmitter<{ timeline: [Timeline] }> {
           .filter(({ present, notes }) => present && notes > 0)
           .map(({ id, notes }) => [id, notes]),
       ),
+      inboxByEmployee: Object.fromEntries(
+        states
+          .filter(({ present, notes, inbox }) => present && notes > 0 && inbox)
+          .map(({ id, inbox }) => [id, (inbox ?? []).slice(-20)]),
+      ),
       actions: states
         .flatMap(({ actions }) => actions)
         .filter((action) => action.startAt + action.durationMs > at),
@@ -116,12 +121,14 @@ export class Simulation extends EventEmitter<{ timeline: [Timeline] }> {
         usage,
         positions,
         notesByEmployee,
+        inboxByEmployee,
       }: Timeline) =>
         JSON.stringify({
           actions,
           usage,
           positions,
           notesByEmployee,
+          inboxByEmployee,
           day: today?.date,
           holiday: today?.holidayNames,
           workingHours: today?.workingHours,
