@@ -180,7 +180,7 @@ export class UsageMonitor {
   private generation = 0;
 
   constructor(
-    private readonly timeZone: string,
+    private timeZone: string,
     private readonly path = join(
       homedir(),
       ".config",
@@ -188,6 +188,12 @@ export class UsageMonitor {
       "shared.json",
     ),
   ) {}
+
+  setTimeZone(timeZone: string): void {
+    if (this.timeZone === timeZone) return;
+    this.timeZone = timeZone;
+    this.screen.clear();
+  }
 
   start(): void {
     void this.reload();

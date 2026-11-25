@@ -22,6 +22,7 @@ export * from "./identity.ts";
 export * from "./importance.ts";
 export * from "./org.ts";
 export * from "./redact.ts";
+export * from "./settings.ts";
 export * from "./simulation.ts";
 export * from "./speech.ts";
 export * from "./townGen.ts";

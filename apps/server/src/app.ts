@@ -4,10 +4,12 @@ import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import {
   type Group,
+  type OfficeSettings,
   type OfficeSnapshot,
   type Placement,
   roomKinds,
   type Timeline,
+  type TownFrame,
 } from "@herdr-office/core";
 import Fastify, { type FastifyRequest } from "fastify";
 import {
@@ -17,6 +19,8 @@ import {
   type Viewer,
 } from "./access.ts";
 import type { OrganizationStore } from "./db/OrganizationStore.ts";
+import { settingsProjection } from "./settings/projection.ts";
+import type { SettingsStore } from "./settings/SettingsStore.ts";
 import type { Simulation } from "./sim/Simulation.ts";
 import type { Company } from "./state/Company.ts";
 import {
@@ -65,6 +69,8 @@ export interface AppOptions {
   /** Speech lines carry topics beyond status; strip them for the public. */
   detailedSpeech?: boolean;
   town?: TownSociety;
+  settings?: SettingsStore;
+  onSettings?: (settings: OfficeSettings) => void;
 }
 
 function facts(request: FastifyRequest): RequestFacts {
@@ -86,30 +92,61 @@ export async function createApp(
   const app = Fastify({
     logger: process.env.OFFICE_DEBUG ? { level: "error" } : false,
   });
-  const access =
+  const settings = options.settings;
+  let version = 0;
+  let access =
     options.access ??
-    createAccess({ trustedNetworks: [], allowedHosts: [], publicHosts: [] });
+    createAccess(
+      settings?.get().security ?? {
+        trustedNetworks: [],
+        allowedHosts: [],
+        publicHosts: [],
+      },
+    );
   const detailedSpeech = options.detailedSpeech ?? false;
   const town = options.town;
   const townSeed = town?.seed ?? configuredTownSeed();
-  const viewers = new WeakMap<object, Viewer>();
+  const viewers = new WeakMap<
+    object,
+    { facts: RequestFacts; preview: boolean; viewer: Viewer }
+  >();
+  const previewOf = (request: FastifyRequest) =>
+    new URL(request.url, "http://localhost").searchParams.get("view") ===
+    "public";
   const viewerOf = (request: FastifyRequest): Viewer =>
-    access.viewer(facts(request));
-  const readSnapshot = (
-    viewer: Viewer,
-  ): OfficeSnapshot & {
-    viewer: Viewer;
-  } => ({
-    ...viewerSnapshot(publicSnapshot(company.snapshot()), viewer),
+    previewOf(request) ? "public" : access.viewer(facts(request));
+  const projection = (viewer: Viewer) =>
+    settings
+      ? settingsProjection(
+          publicSnapshot(company.snapshot()),
+          settings.get(),
+          viewer,
+          settings.mask,
+        )
+      : undefined;
+  const readSnapshot = (viewer: Viewer): OfficeSnapshot => ({
+    ...(projection(viewer)?.snapshot ??
+      viewerSnapshot(publicSnapshot(company.snapshot()), viewer)),
+    ...(settings
+      ? {
+          companyName: settings.mask(withoutIp(settings.get().company.name)),
+          settingsVersion: version,
+        }
+      : {}),
     townSeed,
     viewer,
   });
   const readTimeline = (timeline: Timeline, viewer: Viewer) =>
+    projection(viewer)?.timeline(timeline) ??
     viewerTimeline(timeline, viewer, detailedSpeech);
+  const readTown = (frame: TownFrame | null, viewer: Viewer) =>
+    frame && (projection(viewer)?.town(frame) ?? frame);
 
   // Refuse unknown Host headers (DNS rebinding) and cross-site or public writes.
   app.addHook("onRequest", async (request, reply) => {
     const request_ = facts(request);
+    if (request.url.startsWith("/api/"))
+      reply.header("Cache-Control", "no-store");
     if (!access.hostAllowed(request_))
       return reply.code(421).send({ message: "Unknown host" });
     if (request.method === "GET" || request.method === "HEAD") return;
@@ -123,7 +160,10 @@ export async function createApp(
     now: Date.now(),
   }));
   if (weather) app.get("/api/weather", async () => weather.read());
-  if (town) app.get("/api/town", async () => town.frame());
+  if (town)
+    app.get("/api/town", async (request) =>
+      readTown(town.frame(), viewerOf(request)),
+    );
   app.get("/api/snapshot", async (request) => readSnapshot(viewerOf(request)));
   app.get(
     "/api/org",
@@ -144,7 +184,11 @@ export async function createApp(
     },
     (socket, request) => {
       const viewer = viewerOf(request);
-      viewers.set(socket, viewer);
+      viewers.set(socket, {
+        viewer,
+        facts: facts(request),
+        preview: previewOf(request),
+      });
       socket.send(
         JSON.stringify({
           type: "snapshot",
@@ -158,7 +202,7 @@ export async function createApp(
             timeline: readTimeline(simulation.timeline(), viewer),
           }),
         );
-      const frame = town?.frame();
+      const frame = town && readTown(town.frame(), viewer);
       if (frame) socket.send(JSON.stringify({ type: "town", frame }));
     },
   );
@@ -172,7 +216,16 @@ export async function createApp(
         socket.terminate();
         continue;
       }
-      const viewer = viewers.get(socket) ?? "public";
+      const client = viewers.get(socket);
+      const viewer = client?.viewer ?? "public";
+      if (
+        client &&
+        (!access.hostAllowed(client.facts) ||
+          viewer !== (client.preview ? "public" : access.viewer(client.facts)))
+      ) {
+        socket.close(1008);
+        continue;
+      }
       let message = encoded.get(viewer);
       if (message === undefined) {
         message = JSON.stringify(payload(viewer));
@@ -184,8 +237,30 @@ export async function createApp(
   company.on("delta", (delta) => {
     // Rebuild from the filtered snapshot so public sockets never see raw data.
     const shared = publicDelta(delta);
-    broadcast((viewer) =>
-      viewer === "owner"
+    broadcast((viewer) => {
+      const view = projection(viewer)?.snapshot;
+      if (view) {
+        const ids =
+          shared.buildings &&
+          new Set(shared.buildings.upsert.map(({ id }) => id));
+        return {
+          type: "delta",
+          delta: {
+            ...shared,
+            ...(shared.buildings
+              ? {
+                  buildings: {
+                    ...shared.buildings,
+                    upsert: view.organization.buildings.filter(({ id }) =>
+                      ids?.has(id),
+                    ),
+                  },
+                }
+              : {}),
+          },
+        };
+      }
+      return viewer === "owner"
         ? { type: "delta", delta: shared }
         : {
             type: "delta",
@@ -205,8 +280,8 @@ export async function createApp(
                   },
                 }
               : shared,
-          },
-    );
+          };
+    });
     simulation?.observe(company.snapshot(), delta.messages);
     if (town && (shared.buildings || shared.connected))
       town.observe(publicSnapshot(company.snapshot()));
@@ -221,7 +296,67 @@ export async function createApp(
       timeline: readTimeline(timeline, viewer),
     }));
   });
-  town?.on("town", (frame) => broadcast(() => ({ type: "town", frame })));
+  town?.on("town", (frame) =>
+    broadcast((viewer) => ({ type: "town", frame: readTown(frame, viewer) })),
+  );
+  if (settings) {
+    const section = (name: string): name is keyof OfficeSettings =>
+      ["company", "work", "sharing", "security"].includes(name);
+    app.get("/api/settings", async (request, reply) =>
+      viewerOf(request) === "owner"
+        ? reply.header("Cache-Control", "no-store").send(settings.get())
+        : reply.code(403).send({ message: "소유자만 설정을 볼 수 있습니다." }),
+    );
+    app.get<{ Params: { section: string } }>(
+      "/api/settings/:section",
+      async (request, reply) => {
+        if (viewerOf(request) !== "owner")
+          return reply
+            .code(403)
+            .send({ message: "소유자만 설정을 볼 수 있습니다." });
+        const name = request.params.section;
+        if (!section(name)) return reply.code(404).send();
+        return reply
+          .header("Cache-Control", "no-store")
+          .send(settings.get()[name]);
+      },
+    );
+    app.put<{ Params: { section: string }; Body: unknown }>(
+      "/api/settings/:section",
+      async ({ params, body }, reply) => {
+        const name = params.section;
+        if (!section(name)) return reply.code(404).send();
+        let saved: OfficeSettings;
+        try {
+          saved = settings.save({ ...settings.get(), [name]: body });
+        } catch (error) {
+          if (!(error instanceof RangeError)) throw error;
+          return reply.code(400).send({ message: error.message });
+        }
+        access = createAccess(saved.security);
+        version++;
+        options.onSettings?.(saved);
+        broadcast((viewer) => ({
+          type: "snapshot",
+          snapshot: readSnapshot(viewer),
+        }));
+        if (simulation)
+          broadcast((viewer) => ({
+            type: "actions",
+            timeline: readTimeline(simulation.timeline(), viewer),
+          }));
+        const frame = town?.frame();
+        if (frame)
+          broadcast((viewer) => ({
+            type: "town",
+            frame: readTown(frame, viewer),
+          }));
+        void simulation?.tick();
+        void town?.tick();
+        return reply.header("Cache-Control", "no-store").send(saved[name]);
+      },
+    );
+  }
   if (simulation)
     app.get("/api/actions", async (request) =>
       readTimeline(simulation.timeline(), viewerOf(request)),
@@ -232,6 +367,7 @@ export async function createApp(
     simulation?.stop();
     company.stop();
     store.close();
+    settings?.close();
   });
   const placementText = {
     type: "string",

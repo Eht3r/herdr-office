@@ -70,7 +70,7 @@ export class CompanyCalendar {
   private readonly unsupported = new Set<string>();
 
   constructor(
-    readonly schedule: Schedule = defaultSchedule,
+    public schedule: Schedule = defaultSchedule,
     private readonly lookup: HolidayLookup = { isHoliday, getHolidayNames },
     private readonly warn: (message: string) => void = console.warn,
   ) {

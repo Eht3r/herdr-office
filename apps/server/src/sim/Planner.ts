@@ -1,5 +1,6 @@
 import {
   type CompanyEvent,
+  classifyIntent,
   type Department,
   type Employee,
   type EmployeeUsage,
@@ -81,15 +82,20 @@ export interface PlanningFrame {
 
 export class Planner {
   private initialized = false;
-  private readonly thresholds: AbsenceThresholds;
+  private thresholds: AbsenceThresholds;
   private readonly exposure: SpeechExposure;
-  private readonly remoteWork: RemoteWorkPolicy;
+  private remoteWork: RemoteWorkPolicy;
+
+  private readonly collectSpeech: boolean;
+  private readonly mask: (text: string) => string;
 
   constructor(
     private readonly store: SimulationStore,
     private readonly hours: WorkHours,
     options: {
       exposure?: SpeechExposure;
+      collectSpeech?: boolean;
+      mask?: (text: string) => string;
       thresholds?: AbsenceThresholds;
       remoteWork?: RemoteWorkPolicy;
     } = {},
@@ -108,6 +114,13 @@ export class Planner {
     }
     this.exposure = options.exposure ?? "status";
     this.remoteWork = options.remoteWork ?? "afterHours";
+    this.collectSpeech = options.collectSpeech ?? false;
+    this.mask = options.mask ?? ((text) => text);
+  }
+
+  configure(remoteWork: RemoteWorkPolicy, thresholds: AbsenceThresholds): void {
+    this.thresholds = thresholds;
+    this.remoteWork = remoteWork;
   }
 
   plan(frame: PlanningFrame): Timeline {
@@ -244,13 +257,12 @@ export class Planner {
         const receiverState = states.get(second);
         if (!sender || !recipient || !receiverState || first === second)
           continue;
-        const speech = toSpeech(
-          { from, to, body, at: sentAt },
-          {
-            exposure: this.exposure,
-            recipientRole: recipient.lead ? "lead" : undefined,
-          },
-        );
+        const message = { from, to, body: this.mask(body), at: sentAt };
+        const recipientRole = recipient.lead ? "lead" : undefined;
+        const speech = toSpeech(message, {
+          exposure: this.exposure,
+          recipientRole,
+        });
         const source = members.get(first);
         applyTaskSignal({
           sender,
@@ -260,14 +272,36 @@ export class Planner {
           infrastructure: /infra|인프라|\bsre\b/iu.test(
             source?.departmentName ?? "",
           ),
-          intent: speech.intent,
+          intent: this.collectSpeech ? classifyIntent(body) : speech.intent,
           body,
           at: sentAt,
         });
         this.store.interact(first, second);
         sender.conversation = [
           ...sender.conversation.slice(-19),
-          { recipientId: second, line: withoutIp(speech.line), at: sentAt },
+          {
+            recipientId: second,
+            line: withoutIp(speech.line),
+            at: sentAt,
+            ...(this.collectSpeech
+              ? {
+                  speech: {
+                    status: withoutIp(
+                      toSpeech(message, { exposure: "status", recipientRole })
+                        .line,
+                    ),
+                    title: withoutIp(
+                      toSpeech(message, { exposure: "title", recipientRole })
+                        .line,
+                    ),
+                    messages: withoutIp(
+                      `“${[...message.body.trim().replace(/\s+/gu, " ")].slice(0, 120).join("")}”라고 전했어요.`,
+                    ),
+                    raw: withoutIp([...message.body].slice(0, 800).join("")),
+                  },
+                }
+              : {}),
+          },
         ];
       }
 
@@ -674,14 +708,19 @@ export class Planner {
     }
     const resetAt = usage.resetAt;
     const since = previous?.since ?? at;
+    const { napMs, sleepMs, leaveMs } = this.thresholds;
+    const thresholds = `${napMs}:${sleepMs}:${leaveMs}`;
     const kind =
       resetAt === null
         ? at - since < this.thresholds.napMs
           ? "powerNap"
           : "sleep"
-        : previous?.resetAt === resetAt
+        : previous?.resetAt === resetAt &&
+            (previous.thresholds === undefined ||
+              previous.thresholds === thresholds)
           ? previous.kind
           : classifyAbsence(resetAt - at, this.thresholds);
+    state.absence = { kind, since, resetAt, thresholds };
     if (
       previous?.kind === kind &&
       previous.resetAt === resetAt &&
@@ -689,7 +728,6 @@ export class Planner {
     )
       return true;
     state.actions = [];
-    state.absence = { kind, since, resetAt };
     const gone = kind === "earlyLeave" || kind === "vacation";
     const target: Waypoint =
       gone || atHome(state)
@@ -798,6 +836,9 @@ export class Planner {
             reason: "conversation",
             items: ["laptop", "videoCall"],
             companions: [companion.id],
+            ...(participant === state && message.speech
+              ? { speech: message.speech }
+              : {}),
             ...(participant.remoteActive ? { remoteWork: true } : {}),
           },
         );
@@ -819,6 +860,7 @@ export class Planner {
           fromId: state.id,
           line: message.line,
           at: message.at,
+          ...(message.speech ? { speech: message.speech } : {}),
         },
       ];
       if (!absent && !atHome(state)) {
@@ -854,6 +896,7 @@ export class Planner {
       queueAction(state, at, "talk", recipient.position, 6_000, message.line, {
         reason: "conversation",
         companions: [recipient.id],
+        ...(message.speech ? { speech: message.speech } : {}),
       });
       queueAction(state, at, "move", desk(state), 5_000, "", {
         reason: "conversation",

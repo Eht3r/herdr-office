@@ -113,6 +113,8 @@ export interface Organization {
 
 export interface OfficeSnapshot {
   townSeed?: string;
+  companyName?: string;
+  settingsVersion?: number;
   /** Who the server thinks is looking; only the owner may change settings. */
   viewer?: "owner" | "public";
   revision: number;

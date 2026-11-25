@@ -10,6 +10,7 @@ import {
   type Note,
   type Persona,
   personalityTraits,
+  type SpeechVariants,
   seededEmployeeName,
   type Waypoint,
 } from "@herdr-office/core";
@@ -18,6 +19,7 @@ import { publicAddress, publicMachineId } from "../state/publicView.ts";
 export interface PendingConversation {
   recipientId: string;
   line: string;
+  speech?: SpeechVariants;
   at: number;
 }
 
@@ -38,7 +40,12 @@ export interface EmployeeState {
   dispatches?: { recipientId: string; at: number }[];
   remoteActive?: boolean;
   conversation: PendingConversation[];
-  absence: { kind: AbsenceKind; since: number; resetAt: number | null } | null;
+  absence: {
+    kind: AbsenceKind;
+    since: number;
+    resetAt: number | null;
+    thresholds?: string;
+  } | null;
   warningDay: string | null;
   nextBreak?: string;
   event?: CompanyEvent;

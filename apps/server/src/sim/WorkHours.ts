@@ -36,11 +36,27 @@ export class WorkHours {
 
   constructor(
     private readonly store: SimulationStore,
-    private readonly enabled: boolean,
-    private readonly learn: boolean,
-    private readonly company?: HoursRule,
-    private readonly teams: Record<string, HoursRule> = {},
+    private enabled: boolean,
+    private learn: boolean,
+    private company?: HoursRule,
+    private teams: Record<string, HoursRule> = {},
   ) {}
+
+  configure(
+    enabled: boolean,
+    learn: boolean,
+    company: HoursRule,
+    teams: Record<string, HoursRule>,
+  ): void {
+    if (this.learn !== learn) {
+      this.learned = null;
+      this.nextRefresh = 0;
+    }
+    this.enabled = enabled;
+    this.learn = learn;
+    this.company = company;
+    this.teams = teams;
+  }
 
   observe(team: string, day: WorkDay, now: number): void {
     if (!this.learn) return;
@@ -67,7 +83,9 @@ export class WorkHours {
       this.learned && day.weekday >= 1 && day.weekday <= 5
         ? this.learned
         : standard[day.weekday];
-    const teamHours = this.teams[team]?.[day.weekday];
+    const teamHours = (
+      Object.hasOwn(this.teams, team) ? this.teams[team] : undefined
+    )?.[day.weekday];
     const companyHours = this.company?.[day.weekday];
     const range =
       teamHours !== undefined
@@ -106,7 +124,7 @@ export function configuredTeamHours(
   );
 }
 
-function parseHours(value: unknown): HoursRule {
+export function parseHours(value: unknown): HoursRule {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new RangeError("Invalid work hours");
   const entries = Object.entries(value).map(([weekday, range]) => {
