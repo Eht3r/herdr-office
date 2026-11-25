@@ -26,6 +26,7 @@ const Campus = lazy(() =>
 
 import { subscribeOffice, useOffice } from "./state/officeStore.ts";
 import { OrgPanel, type SelectedEmployee } from "./ui/OrgPanel.tsx";
+import { TownPanel, type TownSelection } from "./ui/TownPanel.tsx";
 
 const emptyOrganization: Organization = { buildings: [] };
 const campusFocus: Focus = { kind: "campus" };
@@ -77,6 +78,15 @@ export function App() {
   const connection = useOffice((state) => state.connection);
   const timeline = useOffice((state) => state.timeline);
   const timelineReceivedAt = useOffice((state) => state.timelineReceivedAt);
+  const townFrame = useOffice((state) => state.townFrame);
+  const townReceivedAt = useOffice((state) => state.townReceivedAt);
+  const [townSelection, setTownSelection] = useState<TownSelection | null>(
+    null,
+  );
+  const selectTown = useCallback(
+    (selection: TownSelection) => setTownSelection(selection),
+    [],
+  );
   const weather = useWeather();
   const [tour, setTour] = useState<"wide" | "approach" | "seen">(() =>
     tourSeen() || reduceMotionPreference() ? "seen" : "wide",
@@ -114,7 +124,11 @@ export function App() {
     buildings: campus.buildings.map(({ id, bounds }) => ({ id, x: bounds.x })),
     homeIds: [...homeIds].sort(),
   });
-  const town = useMemo(() => townGen(JSON.parse(townInput)), [townInput]);
+  const fallbackTown = useMemo(
+    () => townGen(JSON.parse(townInput)),
+    [townInput],
+  );
+  const town = townFrame?.neighborhood ?? fallbackTown;
   const { latitude, longitude, timeZone } = weather.reading.location;
   const sky = useMemo(
     () =>
@@ -260,7 +274,12 @@ export function App() {
             type="button"
             aria-pressed={panelOpen}
             aria-controls="org-panel"
-            onClick={() => setPanelOpen((open) => !open)}
+            onClick={() => {
+              if (townSelection) {
+                setTownSelection(null);
+                setPanelOpen(true);
+              } else setPanelOpen((open) => !open);
+            }}
           >
             조직도
           </button>
@@ -325,6 +344,17 @@ export function App() {
                 <span className="current-location">{locationTitle}</span>
               )}
           </div>
+          {townFrame && (
+            <button
+              className="town-news-button campus-button"
+              type="button"
+              aria-controls="town-panel"
+              aria-pressed={townSelection?.kind === "news"}
+              onClick={() => selectTown({ kind: "news" })}
+            >
+              동네 신문
+            </button>
+          )}
           <div className="scene-weather">
             <div className="weather-reading">
               <strong>{skyLabels[sky.kind]}</strong>
@@ -363,6 +393,9 @@ export function App() {
                 <Campus
                   campus={campus}
                   town={town}
+                  townFrame={townFrame}
+                  townReceivedAt={townReceivedAt}
+                  onTownSelect={selectTown}
                   sky={sky}
                   timeline={timeline}
                   timelineReceivedAt={timelineReceivedAt}
@@ -395,25 +428,34 @@ export function App() {
           </div>
         </section>
 
-        <OrgPanel
-          open={panelOpen || Boolean(selected)}
-          organization={organization}
-          loading={!snapshot}
-          selected={selected}
-          onClose={() => setEmployee(null)}
-          onLocate={locate}
-          actions={{
-            owner: snapshot?.viewer === "owner",
-            sites: [
-              ...new Set(organization.buildings.map((b) => b.site ?? b.name)),
-            ],
-            focus,
-            selected: selected?.employee.address ?? null,
-            onBuilding: selectBuilding,
-            onOffice: selectOffice,
-            onEmployee: selectEmployee,
-          }}
-        />
+        {townSelection && townFrame ? (
+          <TownPanel
+            frame={townFrame}
+            selection={townSelection}
+            select={selectTown}
+            close={() => setTownSelection(null)}
+          />
+        ) : (
+          <OrgPanel
+            open={panelOpen || Boolean(selected)}
+            organization={organization}
+            loading={!snapshot}
+            selected={selected}
+            onClose={() => setEmployee(null)}
+            onLocate={locate}
+            actions={{
+              owner: snapshot?.viewer === "owner",
+              sites: [
+                ...new Set(organization.buildings.map((b) => b.site ?? b.name)),
+              ],
+              focus,
+              selected: selected?.employee.address ?? null,
+              onBuilding: selectBuilding,
+              onOffice: selectOffice,
+              onEmployee: selectEmployee,
+            }}
+          />
+        )}
       </div>
     </main>
   );

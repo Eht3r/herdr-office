@@ -1,6 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { hostname } from "node:os";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import {
@@ -28,6 +27,7 @@ import {
   withoutIp,
 } from "./state/publicView.ts";
 
+import { configuredTownSeed, type TownSociety } from "./town/TownSociety.ts";
 import type { CompanyWeather } from "./weather.ts";
 
 const spaceId = { type: "string", minLength: 1, maxLength: 256 };
@@ -64,6 +64,7 @@ export interface AppOptions {
   webRoot?: string;
   /** Speech lines carry topics beyond status; strip them for the public. */
   detailedSpeech?: boolean;
+  town?: TownSociety;
 }
 
 function facts(request: FastifyRequest): RequestFacts {
@@ -89,9 +90,8 @@ export async function createApp(
     options.access ??
     createAccess({ trustedNetworks: [], allowedHosts: [], publicHosts: [] });
   const detailedSpeech = options.detailedSpeech ?? false;
-  const townSeed =
-    process.env.OFFICE_TOWN_SEED ??
-    createHash("sha256").update(hostname()).digest("hex").slice(0, 18);
+  const town = options.town;
+  const townSeed = town?.seed ?? configuredTownSeed();
   const viewers = new WeakMap<object, Viewer>();
   const viewerOf = (request: FastifyRequest): Viewer =>
     access.viewer(facts(request));
@@ -123,6 +123,7 @@ export async function createApp(
     now: Date.now(),
   }));
   if (weather) app.get("/api/weather", async () => weather.read());
+  if (town) app.get("/api/town", async () => town.frame());
   app.get("/api/snapshot", async (request) => readSnapshot(viewerOf(request)));
   app.get(
     "/api/org",
@@ -157,6 +158,8 @@ export async function createApp(
             timeline: readTimeline(simulation.timeline(), viewer),
           }),
         );
+      const frame = town?.frame();
+      if (frame) socket.send(JSON.stringify({ type: "town", frame }));
     },
   );
 
@@ -205,22 +208,27 @@ export async function createApp(
           },
     );
     simulation?.observe(company.snapshot(), delta.messages);
+    if (town && (shared.buildings || shared.connected))
+      town.observe(publicSnapshot(company.snapshot()));
   });
   company.on("screen", (address, text) =>
     simulation?.observeScreen(address, text),
   );
-  simulation?.on("timeline", (timeline) =>
+  simulation?.on("timeline", (timeline) => {
+    town?.observeActions(timeline);
     broadcast((viewer) => ({
       type: "actions",
       timeline: readTimeline(timeline, viewer),
-    })),
-  );
+    }));
+  });
+  town?.on("town", (frame) => broadcast(() => ({ type: "town", frame })));
   if (simulation)
     app.get("/api/actions", async (request) =>
       readTimeline(simulation.timeline(), viewerOf(request)),
     );
 
   app.addHook("onClose", async () => {
+    town?.stop();
     simulation?.stop();
     company.stop();
     store.close();

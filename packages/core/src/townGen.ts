@@ -22,6 +22,8 @@ export type TownEntityKind =
   | "cafe"
   | "restaurant"
   | "park"
+  | "bakery"
+  | "bookstore"
   | "vacantShop"
   | "parking"
   | "busStop"
@@ -113,6 +115,8 @@ const uses: Record<TownEntityKind, string> = {
   cafe: "커피집",
   restaurant: "식탁",
   park: "공원",
+  bakery: "빵 공방",
+  bookstore: "책방",
   vacantShop: "빈 점포",
   parking: "주차장",
   busStop: "정류장",
@@ -135,6 +139,8 @@ const capacities: Record<TownEntityKind, number> = {
   cafe: 16,
   restaurant: 22,
   park: 38,
+  bakery: 12,
+  bookstore: 10,
   vacantShop: 12,
   parking: 12,
   busStop: 8,

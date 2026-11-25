@@ -5,6 +5,7 @@ import type {
   CommuteMode,
   Waypoint,
 } from "@herdr-office/core";
+import { hashSeed } from "@herdr-office/core";
 import { desk, type EmployeeState, home } from "./employeeState.ts";
 
 export function queueAction(
@@ -117,7 +118,13 @@ export function commute(
         ...(transfer ? [[station, 16_000] as [Waypoint, number]] : []),
         [home(state), road],
       ];
-  segments.forEach(([to, duration], index) => {
+  const detour =
+    kind === "commuteOut" &&
+    reason === "departure" &&
+    hashSeed(`${state.id}:${new Date(at).toISOString().slice(0, 10)}:shop`) %
+      4 ===
+      0;
+  for (const [index, [to, duration]] of segments.entries()) {
     queueAction(
       state,
       at,
@@ -127,5 +134,29 @@ export function commute(
       index === 0 ? line : "",
       props,
     );
-  });
+    if (detour && to.kind === "entrance") {
+      const store: Waypoint = {
+        kind: "convenienceStore",
+        buildingId: state.buildingId,
+      };
+      queueAction(state, at, "move", store, 12_000, "", {
+        ...props,
+        transport: "walk",
+      });
+      queueAction(
+        state,
+        at,
+        "break",
+        store,
+        24_000,
+        "집에 가기 전에 간식 하나 사 갈게요.",
+        {
+          ...props,
+          transport: "walk",
+          motion: "shop",
+          activity: "commuteShop",
+        },
+      );
+    }
+  }
 }

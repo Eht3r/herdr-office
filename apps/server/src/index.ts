@@ -17,6 +17,8 @@ import {
   WorkHours,
 } from "./sim/WorkHours.ts";
 import { Company } from "./state/Company.ts";
+import { configuredTownSeed, TownSociety } from "./town/TownSociety.ts";
+import { fundingFromEnv, TownStore } from "./town/TownStore.ts";
 import { UsageMonitor } from "./usage.ts";
 import { CompanyWeather, companyWeatherLocation } from "./weather.ts";
 
@@ -86,7 +88,18 @@ const weather = new CompanyWeather(
     schedule.timeZone,
   ),
 );
+// Test aid: shift only the neighborhood clock (e.g. +300 to see daytime streets at night).
+const townClockOffsetMs =
+  Number(process.env.OFFICE_TOWN_CLOCK_OFFSET_MINUTES ?? 0) * 60_000 || 0;
+const town = new TownSociety(
+  configuredTownSeed(),
+  new TownStore(dbFile, fundingFromEnv(process.env)),
+  calendar,
+  weather,
+  () => Date.now() + townClockOffsetMs,
+);
 const app = await createApp(company, store, simulation, weather, {
+  town,
   access: createAccess(accessOptionsFromEnv(process.env)),
   webRoot: resolve(repoRoot, "apps/web/dist"),
   detailedSpeech: (exposure ?? "status") !== "status",
@@ -101,6 +114,7 @@ try {
   console.info(`Herdr Office API listening on ${address}`);
   company.start();
   simulation.start();
+  town.start();
 } catch (error) {
   await app.close();
   throw error;

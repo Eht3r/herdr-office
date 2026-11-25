@@ -109,11 +109,13 @@ export function Traffic({
   sky,
   low,
   reduceMotion,
+  showPedestrians,
 }: {
   town: Neighborhood;
   sky: Atmosphere;
   low: boolean;
   reduceMotion: boolean;
+  showPedestrians: boolean;
 }) {
   const carBodies = useRef<InstancedMesh>(null);
   const carWindows = useRef<InstancedMesh>(null);
@@ -145,7 +147,17 @@ export function Traffic({
   const people = useMemo(
     (): Pedestrian[] =>
       Array.from(
-        { length: low ? 5 : sky.night ? 7 : rush ? 26 : 17 },
+        {
+          length: !showPedestrians
+            ? 0
+            : low
+              ? 5
+              : sky.night
+                ? 7
+                : rush
+                  ? 26
+                  : 17,
+        },
         (_, index) => {
           const road = town.roads[index % town.roads.length];
           const length =
@@ -162,7 +174,7 @@ export function Traffic({
           };
         },
       ),
-    [town, low, rush, sky.night],
+    [town, low, rush, sky.night, showPedestrians],
   );
   const dummy = useMemo(() => new Object3D(), []);
 
