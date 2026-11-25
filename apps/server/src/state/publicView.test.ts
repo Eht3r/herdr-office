@@ -1,11 +1,12 @@
 import type { OfficeSnapshot } from "@herdr-office/core";
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   hostnameLabel,
   publicAddress,
   publicDelta,
   publicMachineId,
   publicSnapshot,
+  viewerTimeline,
   withoutIp,
 } from "./publicView.ts";
 
@@ -74,4 +75,37 @@ it("removes network addresses from view labels and remaps cross-building referen
   expect(hostnameLabel("example-host.local")).toBe("example-host");
   expect(hostnameLabel(id)).toBeUndefined();
   expect(withoutIp("localhost:8080")).toBe("localhost:8080");
+});
+
+describe("public timeline", () => {
+  it("hides note contents, usage and reasons from public visitors", () => {
+    const timeline = {
+      at: 0,
+      today: null,
+      usage: { "b/t1": { usedPct: 100, resetAt: 5, exhausted: true } },
+      notesByEmployee: { "b/t1": 1 },
+      inboxByEmployee: {
+        "b/t1": [{ fromId: "b/t2", line: "배포 확인", at: 1 }],
+      },
+      actions: [
+        {
+          id: "a",
+          employeeId: "b/t1",
+          kind: "absence" as const,
+          from: { kind: "desk" as const },
+          to: { kind: "home" as const },
+          startAt: 0,
+          durationMs: 1,
+          props: { usedPct: 100, reason: "usage", notes: [] },
+          line: "",
+        },
+      ],
+    };
+    const shown = viewerTimeline(timeline, "public", false);
+    expect(shown.inboxByEmployee).toBeUndefined();
+    expect(shown.usage).toEqual({ "b/t1": { resetAt: 5, exhausted: true } });
+    expect(shown.notesByEmployee).toEqual({ "b/t1": 1 });
+    expect(shown.actions[0].props).toEqual({});
+    expect(viewerTimeline(timeline, "owner", false)).toBe(timeline);
+  });
 });

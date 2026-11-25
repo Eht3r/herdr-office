@@ -334,6 +334,11 @@ export class Planner {
           .filter(({ present, notes }) => present && notes > 0)
           .map(({ id, notes }) => [id, notes]),
       ),
+      inboxByEmployee: Object.fromEntries(
+        [...states.values()]
+          .filter(({ present, notes, inbox }) => present && notes > 0 && inbox)
+          .map(({ id, inbox }) => [id, (inbox ?? []).slice(-20)]),
+      ),
       actions: [...states.values()]
         .flatMap(({ actions }) => actions)
         .sort((a, b) => a.startAt - b.startAt || a.id.localeCompare(b.id)),

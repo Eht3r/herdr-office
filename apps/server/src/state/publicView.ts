@@ -167,8 +167,15 @@ export function viewerTimeline(
   detailedSpeech: boolean,
 ): Timeline {
   if (viewer === "owner") return timeline;
+  const { inboxByEmployee: _inbox, ...rest } = timeline;
   return {
-    ...timeline,
+    ...rest,
+    // Absence plates need whether and until when, never the percentage.
+    usage: Object.fromEntries(
+      Object.entries(timeline.usage ?? {}).map(
+        ([id, { usedPct: _pct, ...usage }]) => [id, usage],
+      ),
+    ),
     actions: timeline.actions.map((action) => {
       const {
         usedPct: _used,

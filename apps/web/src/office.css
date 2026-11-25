@@ -943,3 +943,45 @@ body,
   color: #fff;
   border-color: #20332d;
 }
+
+.locate-button {
+  margin: 4px 14px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+.note-list {
+  margin: 10px 14px 12px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #fbf3d9;
+  border: 1px solid #ecdca8;
+}
+.note-list h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+.note-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.note-list li {
+  font-size: 12px;
+}
+.note-list time {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.note-list li p,
+.note-hidden {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}

@@ -196,6 +196,18 @@ export function App() {
     },
     [finishTour],
   );
+  // Follow an employee who left their desk: to their building, or out into town.
+  const locate = useCallback(
+    (buildingId: string | null, town: boolean) => {
+      finishTour();
+      setFocus(
+        town || !buildingId
+          ? { kind: "town" }
+          : { kind: "building", id: buildingId },
+      );
+    },
+    [finishTour],
+  );
   const selectOffice = useCallback(
     (buildingId: string, key: string) => {
       finishTour();
@@ -389,6 +401,7 @@ export function App() {
           loading={!snapshot}
           selected={selected}
           onClose={() => setEmployee(null)}
+          onLocate={locate}
           actions={{
             owner: snapshot?.viewer === "owner",
             sites: [

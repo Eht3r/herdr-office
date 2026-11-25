@@ -4,9 +4,11 @@ import type {
   Employee,
   Organization,
 } from "@herdr-office/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { departmentKey, groupKey } from "../layout/campusLayout.ts";
 import type { Focus } from "../scene/Campus.tsx";
+import { useOffice } from "../state/officeStore.ts";
+import { activityOf, isTownPlace, notesOf } from "./activity.ts";
 import {
   employeeName,
   employeeProvider,
@@ -193,14 +195,34 @@ function BuildingTree({
   );
 }
 
+/** Re-render every few seconds so "what they are doing now" stays current. */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
 function AgentCard({
   selected,
+  nameOf,
   onClose,
+  onLocate,
 }: {
   selected: SelectedEmployee;
+  nameOf: (address: string) => string;
   onClose: () => void;
+  onLocate: (buildingId: string | null, town: boolean) => void;
 }) {
   const { employee, department } = selected;
+  const timeline = useOffice((state) => state.timeline);
+  const received = useOffice((state) => state.timelineReceivedAt);
+  const now =
+    useNow(2000) + (timeline && received ? timeline.at - received : 0);
+  const activity = activityOf(timeline, employee.address, now);
+  const inbox = notesOf(timeline, employee.address);
   return (
     <section className="agent-card" aria-labelledby="agent-heading">
       <div className="agent-card-top">
@@ -245,7 +267,48 @@ function AgentCard({
           <dt>작업 제목</dt>
           <dd>{employee.title || "제목 없음"}</dd>
         </div>
+        <div>
+          <dt>지금</dt>
+          <dd>{activity.doing}</dd>
+        </div>
       </dl>
+      {activity.place && (
+        <button
+          type="button"
+          className="locate-button"
+          onClick={() =>
+            onLocate(
+              activity.place?.buildingId ?? null,
+              activity.place ? isTownPlace(activity.place) : false,
+            )
+          }
+        >
+          지금 있는 곳 보기
+        </button>
+      )}
+      {inbox.count > 0 && (
+        <section className="note-list" aria-label="받은 쪽지">
+          <h4>책상 위 쪽지 {inbox.count}개</h4>
+          {inbox.notes.length ? (
+            <ul>
+              {[...inbox.notes].reverse().map((note) => (
+                <li key={`${note.fromId}:${note.at}`}>
+                  <strong>{nameOf(note.fromId)}</strong>
+                  <time dateTime={new Date(note.at).toISOString()}>
+                    {new Intl.DateTimeFormat("ko-KR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(note.at)}
+                  </time>
+                  <p>{note.line || "(내용 비공개)"}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="note-hidden">쪽지 내용은 소유자만 볼 수 있습니다.</p>
+          )}
+        </section>
+      )}
     </section>
   );
 }
@@ -257,6 +320,7 @@ export function OrgPanel({
   loading,
   selected,
   onClose,
+  onLocate,
 }: {
   open: boolean;
   organization: Organization;
@@ -264,6 +328,7 @@ export function OrgPanel({
   loading: boolean;
   selected: SelectedEmployee | undefined;
   onClose: () => void;
+  onLocate: (buildingId: string | null, town: boolean) => void;
 }) {
   return (
     <aside
@@ -276,7 +341,14 @@ export function OrgPanel({
         <h2 id="org-heading">조직도</h2>
         {!loading && <span>{buildingCount(organization)}</span>}
       </div>
-      {selected && <AgentCard selected={selected} onClose={onClose} />}
+      {selected && (
+        <AgentCard
+          selected={selected}
+          nameOf={(address) => nameOf(organization, address)}
+          onClose={onClose}
+          onLocate={onLocate}
+        />
+      )}
       {loading ? (
         <p className="panel-empty" role="status">
           조직도를 불러오는 중입니다.
@@ -307,4 +379,24 @@ export function buildingCount(organization: Organization): string {
   return sites === rooms
     ? `${sites}개 건물`
     : `${sites}개 건물 · 공간 ${rooms}개`;
+}
+
+function nameOf(organization: Organization, address: string): string {
+  const walk = (departments: Department[]): string | null => {
+    for (const department of departments) {
+      const found = department.employees.find((e) => e.address === address);
+      if (found) return employeeName(found);
+      const nested = walk(department.departments);
+      if (nested) return nested;
+    }
+    return null;
+  };
+  for (const building of organization.buildings) {
+    const found = walk([
+      ...building.departments,
+      ...building.groups.flatMap(({ departments }) => departments),
+    ]);
+    if (found) return found;
+  }
+  return "동료";
 }

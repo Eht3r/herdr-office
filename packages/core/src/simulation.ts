@@ -138,5 +138,7 @@ export interface Timeline {
   actions: Action[];
   positions?: Record<string, Waypoint>;
   notesByEmployee?: Record<string, number>;
+  /** Unread notes left on each absent employee's desk (owner view only). */
+  inboxByEmployee?: Record<string, Note[]>;
   usage: Record<string, Partial<EmployeeUsage>>;
 }
