@@ -1,0 +1,33 @@
+{
+  "name": "herdr-office",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || >=24"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently --kill-others --names server,web 'npm run dev -w @herdr-office/server' 'npm run dev -w @herdr-office/web'",
+    "test": "vitest run",
+    "check": "biome check . && tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build -w @herdr-office/web",
+    "start": "npm run build -w @herdr-office/web && npm run start -w @herdr-office/server"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.0",
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.2.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
+  },
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Herdr 에이전트 팀을 실제 시간·날씨 속 3D 회사로 보여주는 셀프호스트 웹 서비스",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eht3r/herdr-office.git"
+  }
+}

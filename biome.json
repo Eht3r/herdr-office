@@ -1,0 +1,16 @@
+{
+  "files": {
+    "includes": [
+      "**",
+      "!!.serena",
+      "!!.playwright-mcp",
+      "!!templates",
+      "!!.office-data",
+      "!!**/dist",
+      "!package-lock.json"
+    ]
+  },
+  "formatter": {
+    "indentStyle": "space"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": ["Bash(herdr-office *)", "Edit(./**)"],
+    "deny": ["WebFetch", "WebSearch", "Agent"]
+  }
+}
