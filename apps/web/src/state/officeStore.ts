@@ -3,6 +3,7 @@ import type {
   OfficeEvent,
   OfficeSnapshot,
   Timeline,
+  TownFrame,
 } from "@herdr-office/core";
 import { create } from "zustand";
 import { departmentKey, groupKey } from "../layout/campusLayout.ts";
@@ -15,6 +16,8 @@ interface OfficeState {
   appeared: ReadonlyMap<string, number>;
   timeline: Timeline | null;
   timelineReceivedAt: number;
+  townFrame: TownFrame | null;
+  townReceivedAt: number;
 }
 
 export const useOffice = create<OfficeState>(() => ({
@@ -23,6 +26,8 @@ export const useOffice = create<OfficeState>(() => ({
   appeared: new Map(),
   timeline: null,
   timelineReceivedAt: 0,
+  townFrame: null,
+  townReceivedAt: 0,
 }));
 
 export function applyOfficeEvent(
@@ -30,7 +35,7 @@ export function applyOfficeEvent(
   event: OfficeEvent,
 ): OfficeSnapshot | null {
   if (event.type === "snapshot") return event.snapshot;
-  if (event.type === "actions") return previous;
+  if (event.type === "actions" || event.type === "town") return previous;
   const { delta } = event;
   if (!previous) return null;
   if (delta.revision <= previous.revision) return previous;
@@ -111,6 +116,18 @@ export function subscribeOffice(): () => void {
       if (!active || socket !== current) return;
       try {
         const event = JSON.parse(data) as OfficeEvent;
+        if (event.type === "town" && ready) {
+          const before = useOffice.getState().townFrame;
+          const frame = event.frame;
+          useOffice.setState({
+            townFrame:
+              before?.layoutKey === frame.layoutKey
+                ? { ...frame, neighborhood: before.neighborhood }
+                : frame,
+            townReceivedAt: Date.now(),
+          });
+          return;
+        }
         if (event.type === "actions" && ready) {
           useOffice.setState({
             timeline: event.timeline,

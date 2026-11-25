@@ -1,9 +1,13 @@
-import type { Neighborhood, TownEntity } from "@herdr-office/core";
+import type { Neighborhood, TownEntity, TownFrame } from "@herdr-office/core";
 import { useMemo } from "react";
-import type { Point3 } from "../layout/campusLayout.ts";
+import type { CampusLayout, Point3 } from "../layout/campusLayout.ts";
+import { Box } from "../scene/Primitives.tsx";
 import { SceneLabel } from "../scene/SceneLabels.tsx";
+import { routePlanner } from "../sim/playback.ts";
+import type { TownSelection } from "../ui/TownPanel.tsx";
 import type { Atmosphere } from "../weather/atmosphere.ts";
 import { Batch, type Piece } from "./Batch.tsx";
+import { Residents } from "./Residents.tsx";
 import { Traffic } from "./Traffic.tsx";
 
 /** Countryside width as a multiple of the town size. */
@@ -447,10 +451,20 @@ function architecture(
   return { solids, wet, light, leaves, cylinders };
 }
 
-function TownSigns({ entities }: { entities: TownEntity[] }) {
+function TownSigns({
+  entities,
+  frame,
+  select,
+}: {
+  entities: TownEntity[];
+  frame: TownFrame | null;
+  select: (selection: TownSelection) => void;
+}) {
+  const shops = new Map(frame?.shops.map((shop) => [shop.slotId, shop]));
   const labeled = new Set<string>();
   return entities
-    .filter(({ kind }) => {
+    .filter(({ id, kind }) => {
+      if (shops.has(id)) return kind !== "vacantShop";
       if (
         ![
           "convenienceStore",
@@ -480,32 +494,90 @@ function TownSigns({ entities }: { entities: TownEntity[] }) {
         ]}
         order={3}
       >
-        <span className="town-label" data-kind={kind}>
-          {name}
-        </span>
+        {shops.has(id) ? (
+          <button
+            type="button"
+            className="town-label town-shop-label"
+            data-kind={kind}
+            onClick={() => select({ kind: "shop", id })}
+          >
+            {name}
+          </button>
+        ) : (
+          <span className="town-label" data-kind={kind}>
+            {name}
+          </span>
+        )}
       </SceneLabel>
     ));
 }
 
+function Decoration({
+  town,
+  decoration,
+}: {
+  town: Neighborhood;
+  decoration: TownFrame["decoration"];
+}) {
+  const park = town.entities.find(({ kind }) => kind === "park");
+  if (!park) return null;
+  const [x, , z] = park.position;
+  const event = decoration.kind !== "season";
+  return (
+    <group position={[x, 0.06, z + 3]}>
+      {[-3.4, 0, 3.4].map((offset) => (
+        <group key={offset} position={[offset, 0, 0]}>
+          <Box
+            position={[0, 0.46, 0]}
+            size={[event ? 1.8 : 0.16, 0.9, event ? 1 : 0.16]}
+            color="#a38565"
+          />
+          <Box
+            position={[0, event ? 1.77 : 0.95, 0]}
+            size={[event ? 2 : 0.48, event ? 0.12 : 0.34, event ? 1.35 : 0.48]}
+            color={decoration.color}
+          />
+          {event && (
+            <Box
+              position={[-0.68, 1.21, 0]}
+              size={[0.09, 1.1, 0.09]}
+              color="#a38565"
+            />
+          )}
+        </group>
+      ))}
+    </group>
+  );
+}
+
 export function Town({
+  campus,
   town,
   sky,
   showSigns,
   low,
   reduceMotion,
   litHomes,
+  frame,
+  receivedAt,
+  select,
 }: {
+  campus: CampusLayout;
   town: Neighborhood;
   sky: Atmosphere;
   showSigns: boolean;
   low: boolean;
   reduceMotion: boolean;
   litHomes: ReadonlySet<string>;
+  frame: TownFrame | null;
+  receivedAt: number;
+  select: (selection: TownSelection) => void;
 }) {
   const geometry = useMemo(
     () => architecture(town, sky, litHomes),
     [town, sky, litHomes],
   );
+  const routes = useMemo(() => routePlanner(town, campus), [town, campus]);
   return (
     <>
       <Batch pieces={geometry.solids} />
@@ -517,8 +589,49 @@ export function Town({
       <Batch pieces={geometry.leaves} form="round" />
       <Batch pieces={geometry.cylinders} form="post" />
       <Batch pieces={geometry.light} emissive shadow={false} />
-      {showSigns && <TownSigns entities={town.entities} />}
-      <Traffic town={town} sky={sky} low={low} reduceMotion={reduceMotion} />
+      {showSigns && (
+        <TownSigns entities={town.entities} frame={frame} select={select} />
+      )}
+      <Traffic
+        town={town}
+        sky={sky}
+        low={low}
+        reduceMotion={reduceMotion}
+        showPedestrians={!frame}
+      />
+      {frame && (
+        <>
+          <Decoration town={town} decoration={frame.decoration} />
+          <Residents
+            frame={frame}
+            receivedAt={receivedAt}
+            routes={routes}
+            low={low}
+            reduceMotion={reduceMotion}
+            select={(id) => select({ kind: "resident", id })}
+          />
+          {frame.shops.map(({ slotId }) => {
+            const site = town.entities.find(({ id }) => id === slotId);
+            if (!site) return null;
+            return (
+              // biome-ignore lint/a11y/noStaticElementInteractions: Three.js hit mesh; the newspaper provides shop buttons.
+              <mesh
+                key={slotId}
+                position={[site.position[0], 1.7, site.position[2]]}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  select({ kind: "shop", id: slotId });
+                }}
+              >
+                <boxGeometry
+                  args={[site.parcel.width * 0.7, 3.4, site.parcel.depth * 0.7]}
+                />
+                <meshBasicMaterial visible={false} />
+              </mesh>
+            );
+          })}
+        </>
+      )}
     </>
   );
 }

@@ -1,3 +1,4 @@
+import type { TownFrame } from "@herdr-office/core";
 import {
   employeeHomeId,
   type Neighborhood,
@@ -22,6 +23,7 @@ import {
   findOffice,
 } from "../layout/campusLayout.ts";
 import { Town } from "../town/Town.tsx";
+import type { TownSelection } from "../ui/TownPanel.tsx";
 import type { Atmosphere } from "../weather/atmosphere.ts";
 import { Clouds, Precipitation, Sky } from "../weather/Sky.tsx";
 import { Actors } from "./Actors.tsx";
@@ -247,6 +249,9 @@ function Plantings({ building }: { building: BuildingLayout }) {
 export interface CampusProps {
   campus: CampusLayout;
   town: Neighborhood;
+  townFrame: TownFrame | null;
+  townReceivedAt: number;
+  onTownSelect: (selection: TownSelection) => void;
   sky: Atmosphere;
   timeline: Timeline | null;
   timelineReceivedAt: number;
@@ -269,6 +274,9 @@ export const Campus = memo(function Campus({
   timeline,
   timelineReceivedAt,
   opening,
+  townFrame,
+  townReceivedAt,
+  onTownSelect,
   onReady,
   focus,
   appeared,
@@ -363,9 +371,13 @@ export const Campus = memo(function Campus({
                 reduceMotion={reduceMotion}
               />
               <Town
+                campus={campus}
                 town={town}
                 sky={sky}
                 showSigns={focus.kind === "town"}
+                frame={townFrame}
+                receivedAt={townReceivedAt}
+                select={onTownSelect}
                 low={lowPerformance}
                 reduceMotion={reduceMotion}
                 litHomes={litHomes}

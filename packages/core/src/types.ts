@@ -1,4 +1,5 @@
 import type { Timeline } from "./simulation.ts";
+import type { TownFrame } from "./townSociety.ts";
 
 export interface Employee {
   address: string;
@@ -129,4 +130,5 @@ export interface OfficeDelta {
 export type OfficeEvent =
   | { type: "snapshot"; snapshot: OfficeSnapshot }
   | { type: "delta"; delta: OfficeDelta }
-  | { type: "actions"; timeline: Timeline };
+  | { type: "actions"; timeline: Timeline }
+  | { type: "town"; frame: TownFrame };

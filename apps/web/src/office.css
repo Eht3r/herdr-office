@@ -979,9 +979,128 @@ body,
   color: var(--muted);
   font-size: 11px;
 }
-.note-list li p,
+.note-list p,
 .note-hidden {
   margin: 2px 0 0;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.town-news-button {
+  position: absolute;
+  z-index: 6;
+  top: 108px;
+  left: 16px;
+}
+
+.town-shop-label {
+  cursor: pointer;
+  font: inherit;
+  pointer-events: auto;
+}
+
+.town-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.town-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.town-panel h2,
+.town-panel h3,
+.town-panel p {
+  margin: 0;
+}
+
+.town-panel h2 {
+  font-size: 1rem;
+}
+
+.town-panel h3 {
+  font-size: 0.89rem;
+}
+
+.town-panel-content {
+  display: grid;
+  overflow: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  font-size: 0.85rem;
+}
+
+.town-panel-content time,
+.town-detail-subtitle {
+  color: var(--muted);
+}
+
+.town-stories,
+.town-menu {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.town-stories li {
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 9px;
+}
+
+.town-stories li > span {
+  color: var(--accent);
+  font-size: 0.73rem;
+}
+
+.town-details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.town-details div,
+.town-menu li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.town-details dd {
+  margin: 0;
+  text-align: right;
+}
+
+.town-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.town-panel .town-links button,
+.town-greeting {
+  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-radius: var(--small-radius);
+  padding: 4px 7px;
+}
+
+@media (max-width: 670px) {
+  .town-news-button {
+    top: 98px;
+    left: 10px;
+  }
 }
